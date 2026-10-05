@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+import '../../config/app_theme.dart';
 import '../../models/referral_request_item.dart';
+import '../../models/hospital_search_result.dart';
+import '../../services/map_service.dart';
 import '../../services/patient_service.dart';
+import '../../widgets/widgets.dart';
 
 class MyRequestsTab extends StatefulWidget {
   final PatientService patientService;
@@ -23,7 +28,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
   void initState() {
     super.initState();
     _fetchRequests(showLoading: true);
-    // Auto refresh every 4 seconds
+    // Auto-refresh every 4 seconds for live status updates
     _timer = Timer.periodic(const Duration(seconds: 4), (_) {
       _fetchRequests(showLoading: false);
     });
@@ -65,20 +70,26 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Request'),
-        content: const Text('Are you sure you want to cancel this referral request?'),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
+        title: Text('Cancel Referral Request', style: AppTypography.headingSmall()),
+        content: Text(
+          'Are you sure you want to cancel this bed reservation request? Reserved clinical capacity will be released back to the network.',
+          style: AppTypography.bodyMedium(),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No, keep it'),
+            child: Text('Keep Request', style: AppTypography.bodyMedium(color: AppColors.textSecondary)),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+          SizedBox(
+            width: 140,
+            child: AppButton(
+              text: 'Yes, Cancel',
+              variant: AppButtonVariant.danger,
+              height: 42,
+              fontSize: 13,
+              onPressed: () => Navigator.of(ctx).pop(true),
             ),
-            child: const Text('Yes, Cancel'),
           ),
         ],
       ),
@@ -92,8 +103,8 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Request cancelled successfully.'),
-            backgroundColor: Colors.grey,
+            content: Text('Referral request cancelled successfully.'),
+            backgroundColor: AppColors.ink,
           ),
         );
         _fetchRequests(showLoading: false);
@@ -103,7 +114,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to cancel request: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.primaryRed,
           ),
         );
       }
@@ -111,20 +122,6 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
       if (mounted) {
         setState(() => _cancellingIds.remove(requestId));
       }
-    }
-  }
-
-  Color _getUrgencyColor(String urgency) {
-    switch (urgency.toLowerCase()) {
-      case 'critical':
-        return Colors.red;
-      case 'high':
-        return Colors.orange.shade800;
-      case 'medium':
-        return Colors.blue;
-      case 'low':
-      default:
-        return Colors.grey;
     }
   }
 
@@ -147,41 +144,36 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
   Widget _buildStatusStepper(String currentStatus) {
     final activeIndex = _getStatusStepIndex(currentStatus);
 
-    // Terminal/Error statuses
     if (activeIndex == -1) {
-      Color color = Colors.grey;
-      String text = currentStatus.replaceAll('_', ' ').toUpperCase();
-
-      if (currentStatus == 'rejected' || currentStatus == 'expired' || currentStatus == 'no_capacity') {
-        color = Colors.red;
-      }
-
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
+          color: AppColors.redTint,
+          borderRadius: AppRadius.radiusMd,
+          border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              currentStatus == 'cancelled' ? Icons.cancel_outlined : Icons.error_outline_rounded,
-              color: color,
+            const Icon(
+              Icons.cancel_rounded,
+              color: AppColors.primaryRed,
               size: 18,
             ),
             const SizedBox(width: 8),
             Text(
-              text,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+              currentStatus.replaceAll('_', ' ').toUpperCase(),
+              style: AppTypography.label(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.redDark,
+              ),
             ),
           ],
         ),
       );
     }
 
-    // 4-step timeline: Request Sent -> Accepted -> Patient Transferred -> Admitted
     final steps = ['Request Sent', 'Accepted', 'Transferred', 'Admitted'];
 
     return Column(
@@ -201,18 +193,18 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isCompleted
-                          ? (isCurrent ? Colors.teal : Colors.green)
-                          : Colors.grey.shade300,
+                          ? (isCurrent ? AppColors.primaryRed : AppColors.green)
+                          : AppColors.border,
                     ),
                     child: Center(
                       child: isCompleted
-                          ? const Icon(Icons.check, size: 16, color: Colors.white)
+                          ? const Icon(Icons.check_rounded, size: 15, color: AppColors.white)
                           : Text(
                               '${index + 1}',
-                              style: const TextStyle(
-                                fontSize: 11,
+                              style: AppTypography.label(
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.grey,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                     ),
@@ -221,7 +213,7 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
                     Expanded(
                       child: Container(
                         height: 3,
-                        color: index < activeIndex ? Colors.green : Colors.grey.shade300,
+                        color: index < activeIndex ? AppColors.green : AppColors.border,
                       ),
                     ),
                 ],
@@ -238,10 +230,10 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
               child: Text(
                 steps[index],
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: AppTypography.label(
                   fontSize: 10,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                  color: isCurrent ? Colors.teal : Colors.grey.shade700,
+                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                  color: isCurrent ? AppColors.primaryRed : AppColors.textSecondary,
                 ),
               ),
             );
@@ -253,29 +245,34 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF00796B)));
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.xxl),
+        child: SkeletonListPlaceholder(count: 3, itemHeight: 180),
+      );
     }
 
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text(
-              'Failed to load your requests',
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () => _fetchRequests(showLoading: true),
-              child: const Text('Retry'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.primaryRed),
+              const SizedBox(height: AppSpacing.md),
+              Text('Failed to load referral requests', style: AppTypography.headingSmall()),
+              const SizedBox(height: AppSpacing.xs),
+              Text(_error!, style: AppTypography.bodySmall(color: AppColors.textSecondary)),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                text: 'Retry Loading',
+                isFullWidth: false,
+                height: 44,
+                onPressed: () => _fetchRequests(showLoading: true),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -283,22 +280,15 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
     if (_requests.isEmpty) {
       return RefreshIndicator(
         onRefresh: () => _fetchRequests(showLoading: true),
+        color: AppColors.primaryRed,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Container(
-            height: 400,
-            alignment: Alignment.center,
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.assignment_outlined, size: 48, color: Colors.grey),
-                SizedBox(height: 12),
-                Text(
-                  'No referral requests submitted yet.',
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-              ],
-            ),
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: const EmptyState(
+            icon: Icons.assignment_outlined,
+            title: 'No Active Requests',
+            message:
+                'You have not submitted any patient referral requests. Search hospitals to initiate a dispatch.',
           ),
         ),
       );
@@ -306,150 +296,229 @@ class _MyRequestsTabState extends State<MyRequestsTab> {
 
     return RefreshIndicator(
       onRefresh: () => _fetchRequests(showLoading: true),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
+      color: AppColors.primaryRed,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(AppSpacing.lg),
         itemCount: _requests.length,
+        separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.lg),
         itemBuilder: (context, index) {
           final req = _requests[index];
           final isCancelling = _cancellingIds.contains(req.id);
-          final urgencyColor = _getUrgencyColor(req.urgency);
+          final isAcceptedOrActive = req.status == 'accepted' ||
+              req.status == 'patient_transferred' ||
+              req.status == 'admitted';
 
-          return Card(
-            elevation: 3,
-            margin: const EdgeInsets.only(bottom: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Patient Ref & Urgency Badge
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
+          final hospLat = req.hospitalLatitude ?? req.latitude ?? 25.3960;
+          final hospLng = req.hospitalLongitude ?? req.longitude ?? 68.3578;
+          final hospName = req.hospitalName ?? 'Assigned Medical Facility';
+
+          return AppCard(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Patient Reference & Urgency Badge
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryRed.withValues(alpha: 0.12),
+                            borderRadius: AppRadius.radiusSm,
+                          ),
+                          child: const Icon(
+                            Icons.person_pin_circle_rounded,
+                            color: AppColors.primaryRed,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Text(
+                          req.patientReference,
+                          style: AppTypography.headingSmall(),
+                        ),
+                      ],
+                    ),
+                    StatusChip(status: req.urgency),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // Destination Hospital Name & Address
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.local_hospital_rounded,
+                      size: 18,
+                      color: AppColors.primaryRed,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.person_pin_circle_rounded, color: theme.colorScheme.primary),
-                          const SizedBox(width: 8),
                           Text(
-                            req.patientReference,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ],
-                      ),
-                      Chip(
-                        label: Text(
-                          req.urgency.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                        backgroundColor: urgencyColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Hospital Name
-                  Row(
-                    children: [
-                      const Icon(Icons.local_hospital_outlined, size: 18, color: Colors.teal),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          req.hospitalName ?? 'Hospital ID: ${req.selectedHospitalId}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: Colors.teal,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Required Resources Chips
-                  const Text('Required Resources:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: req.requiredResources.map((res) {
-                      return Chip(
-                        label: Text(
-                          res.replaceAll('_', ' ').toUpperCase(),
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        backgroundColor: Colors.teal.shade50,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Countdown timer if pending
-                  if (req.isPending && req.minutesLeft > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade300),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.timer_outlined, size: 16, color: Colors.orange.shade800),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Reservation expires in: ${req.minutesLeft.toStringAsFixed(1)} min',
-                            style: TextStyle(
-                              color: Colors.orange.shade900,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                            hospName,
+                            style: AppTypography.bodyMedium(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
                             ),
                           ),
+                          if (req.hospitalAddress != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              req.hospitalAddress!,
+                              style: AppTypography.bodySmall(color: AppColors.textSecondary),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
                   ],
+                ),
+                const SizedBox(height: AppSpacing.md),
 
-                  // Status Stepper / Timeline
-                  const Text('Request Timeline:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  _buildStatusStepper(req.status),
-                  const SizedBox(height: 14),
+                // Required Resource Badges
+                Text(
+                  'REQUIRED CLINICAL RESOURCES',
+                  style: AppTypography.label(fontSize: 10, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: req.requiredResources.map((res) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: AppRadius.radiusPill,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        res.replaceAll('_', ' ').toUpperCase(),
+                        style: AppTypography.label(fontSize: 10, color: AppColors.ink),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.lg),
 
-                  // Cancel Button for Pending Requests
-                  if (req.isPending) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: isCancelling ? null : () => _handleCancelRequest(req.id),
-                        icon: isCancelling
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
-                              )
-                            : const Icon(Icons.cancel_outlined, size: 18),
-                        label: Text(isCancelling ? 'Cancelling...' : 'Cancel Request'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                // Countdown timer if pending
+                if (req.isPending && req.minutesLeft > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.amberTint,
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(color: AppColors.amber.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 16, color: AppColors.amberDark),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Temporary reservation active: ${req.minutesLeft.toStringAsFixed(1)} mins remaining',
+                          style: AppTypography.label(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.amberDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+
+                // Request Timeline Stepper
+                Text(
+                  'DISPATCH LIFECYCLE',
+                  style: AppTypography.label(fontSize: 10, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildStatusStepper(req.status),
+
+                // Mini Map & Big Red Navigation Button for Accepted/Active requests
+                if (isAcceptedOrActive) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  const Divider(),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  Row(
+                    children: [
+                      const Icon(Icons.navigation_rounded, color: AppColors.primaryRed, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        'FACILITY ROUTING & DIRECTIONS',
+                        style: AppTypography.label(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryRed,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Mini Map
+                  SizedBox(
+                    height: 180,
+                    child: HospitalMap(
+                      isMiniMap: true,
+                      initialCenter: LatLng(hospLat, hospLng),
+                      initialZoom: 14.5,
+                      suitableHospitals: [
+                        HospitalMatchItem(
+                          hospitalId: req.selectedHospitalId,
+                          name: hospName,
+                          address: req.hospitalAddress ?? '',
+                          contact: '',
+                          latitude: hospLat,
+                          longitude: hospLng,
+                          distanceKm: 0,
+                          estimatedTravelMinutes: 0,
+                          matchPercent: 100,
+                          capacities: {},
+                          stale: false,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Big Red "Navigate to Hospital" Button
+                  AppButton(
+                    text: 'Navigate to $hospName',
+                    icon: Icons.directions_car_rounded,
+                    height: 52,
+                    fontSize: 15,
+                    onPressed: () {
+                      MapService.openInGoogleMaps(hospLat, hospLng, hospName);
+                    },
+                  ),
                 ],
-              ),
+
+                // Cancel Request Button for Pending
+                if (req.isPending) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  AppButton(
+                    text: 'Cancel Reservation Request',
+                    icon: Icons.cancel_outlined,
+                    variant: AppButtonVariant.danger,
+                    isLoading: isCancelling,
+                    height: 46,
+                    fontSize: 13,
+                    onPressed: () => _handleCancelRequest(req.id),
+                  ),
+                ],
+              ],
             ),
           );
         },

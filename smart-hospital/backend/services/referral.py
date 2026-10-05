@@ -25,6 +25,11 @@ def format_request_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     else:
         doc["minutes_left"] = 0.0
 
+    loc = doc.get("location")
+    if isinstance(loc, dict) and "coordinates" in loc and len(loc["coordinates"]) >= 2:
+        doc["longitude"] = loc["coordinates"][0]
+        doc["latitude"] = loc["coordinates"][1]
+
     return doc
 
 async def create_referral_request(
@@ -129,13 +134,19 @@ async def get_user_requests(requester_id: str) -> List[Dict[str, Any]]:
     cursor = db.requests.find({"requester_id": requester_id}).sort("created_at", -1)
     reqs = await cursor.to_list(length=100)
     for r in reqs:
-        if not r.get("hospital_name") and r.get("selected_hospital_id"):
+        h_id = r.get("selected_hospital_id")
+        if h_id:
             try:
-                h = await db.hospitals.find_one({"_id": ObjectId(r["selected_hospital_id"])})
+                h = await db.hospitals.find_one({"_id": ObjectId(h_id)})
             except Exception:
-                h = await db.hospitals.find_one({"_id": r["selected_hospital_id"]})
+                h = await db.hospitals.find_one({"_id": h_id})
             if h:
                 r["hospital_name"] = h.get("name")
+                r["hospital_address"] = h.get("address")
+                h_loc = h.get("location")
+                if isinstance(h_loc, dict) and "coordinates" in h_loc and len(h_loc["coordinates"]) >= 2:
+                    r["hospital_longitude"] = h_loc["coordinates"][0]
+                    r["hospital_latitude"] = h_loc["coordinates"][1]
     return [format_request_doc(r) for r in reqs]
 
 async def get_hospital_requests(hospital_id: str) -> List[Dict[str, Any]]:

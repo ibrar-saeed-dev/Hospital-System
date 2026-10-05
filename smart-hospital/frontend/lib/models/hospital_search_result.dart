@@ -30,6 +30,8 @@ class HospitalMatchItem {
   final String address;
   final String contact;
   final Map<String, dynamic>? location;
+  final double? latitude;
+  final double? longitude;
   final double distanceKm;
   final double estimatedTravelMinutes;
   final double matchPercent;
@@ -43,6 +45,8 @@ class HospitalMatchItem {
     required this.address,
     required this.contact,
     this.location,
+    this.latitude,
+    this.longitude,
     required this.distanceKm,
     required this.estimatedTravelMinutes,
     required this.matchPercent,
@@ -60,12 +64,27 @@ class HospitalMatchItem {
       }
     });
 
+    double? lat = (json['latitude'] as num?)?.toDouble();
+    double? lng = (json['longitude'] as num?)?.toDouble();
+
+    if (lat == null || lng == null) {
+      final loc = json['location'];
+      if (loc is Map<String, dynamic> &&
+          loc['coordinates'] is List &&
+          (loc['coordinates'] as List).length >= 2) {
+        lng = (loc['coordinates'][0] as num?)?.toDouble();
+        lat = (loc['coordinates'][1] as num?)?.toDouble();
+      }
+    }
+
     return HospitalMatchItem(
       hospitalId: json['hospital_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       contact: json['contact']?.toString() ?? '',
       location: json['location'] as Map<String, dynamic>?,
+      latitude: lat,
+      longitude: lng,
       distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
       estimatedTravelMinutes: (json['estimated_travel_minutes'] as num?)?.toDouble() ?? 0.0,
       matchPercent: (json['match_percent'] as num?)?.toDouble() ?? 0.0,
@@ -82,6 +101,8 @@ class HospitalExcludedItem {
   final String address;
   final String contact;
   final Map<String, dynamic>? location;
+  final double? latitude;
+  final double? longitude;
   final double distanceKm;
   final double estimatedTravelMinutes;
   final String exclusionReason;
@@ -95,6 +116,8 @@ class HospitalExcludedItem {
     required this.address,
     required this.contact,
     this.location,
+    this.latitude,
+    this.longitude,
     required this.distanceKm,
     required this.estimatedTravelMinutes,
     required this.exclusionReason,
@@ -112,12 +135,27 @@ class HospitalExcludedItem {
       }
     });
 
+    double? lat = (json['latitude'] as num?)?.toDouble();
+    double? lng = (json['longitude'] as num?)?.toDouble();
+
+    if (lat == null || lng == null) {
+      final loc = json['location'];
+      if (loc is Map<String, dynamic> &&
+          loc['coordinates'] is List &&
+          (loc['coordinates'] as List).length >= 2) {
+        lng = (loc['coordinates'][0] as num?)?.toDouble();
+        lat = (loc['coordinates'][1] as num?)?.toDouble();
+      }
+    }
+
     return HospitalExcludedItem(
       hospitalId: json['hospital_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       contact: json['contact']?.toString() ?? '',
       location: json['location'] as Map<String, dynamic>?,
+      latitude: lat,
+      longitude: lng,
       distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
       estimatedTravelMinutes: (json['estimated_travel_minutes'] as num?)?.toDouble() ?? 0.0,
       exclusionReason: json['exclusion_reason']?.toString() ?? 'Not suitable',

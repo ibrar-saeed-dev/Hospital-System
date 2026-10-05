@@ -326,20 +326,54 @@ async def list_all_hospitals_admin() -> List[Dict[str, Any]]:
 
     for h in hospitals:
         h_id = str(h["_id"])
-        # Find latest capacity update for this hospital
-        latest_cap = await db.capacities.find_one(
-            {"hospital_id": h_id},
-            sort=[("last_updated", -1)]
-        )
-        lu = latest_cap.get("last_updated") if latest_cap else None
+        
+        # Calculate occupancy metrics for this hospital
+        caps = await db.capacities.find({"hospital_id": h_id}).to_list(length=50)
+        tot_cap = 0
+        tot_occ = 0
+        icu_tot = 0
+        icu_occ = 0
+        lu = None
+
+        for c in caps:
+            tot = c.get("total", 0)
+            occ = c.get("occupied", 0)
+            r_type = c.get("resource_type", "")
+            tot_cap += tot
+            tot_occ += occ
+
+            if r_type == "icu_bed":
+                icu_tot += tot
+                icu_occ += occ
+
+            c_lu = c.get("last_updated")
+            if isinstance(c_lu, datetime):
+                if lu is None or c_lu > lu:
+                    lu = c_lu
+
+        overall_occ_pct = round((tot_occ / tot_cap * 100.0), 1) if tot_cap > 0 else 0.0
+        icu_occ_pct = round((icu_occ / icu_tot * 100.0), 1) if icu_tot > 0 else 0.0
         lu_iso = lu.isoformat() if isinstance(lu, datetime) else None
+
+        loc = h.get("location")
+        lat = None
+        lng = None
+        if isinstance(loc, dict) and "coordinates" in loc and len(loc["coordinates"]) >= 2:
+            lng = loc["coordinates"][0]
+            lat = loc["coordinates"][1]
 
         results.append({
             "id": h_id,
             "name": h.get("name"),
             "address": h.get("address"),
             "contact": h.get("contact"),
-            "location": h.get("location"),
+            "location": loc,
+            "latitude": lat,
+            "longitude": lng,
+            "overall_occupancy_percent": overall_occ_pct,
+            "icu_occupancy_percent": icu_occ_pct,
+            "total_capacity": tot_cap,
+            "total_occupied": tot_occ,
             "verification_status": h.get("verification_status", "verified"),
             "account_status": h.get("account_status", "active"),
             "last_capacity_update": lu_iso

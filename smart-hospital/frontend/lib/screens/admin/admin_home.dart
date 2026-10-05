@@ -6,6 +6,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/widgets.dart';
 import 'system_analytics_tab.dart';
 import 'admin_hospitals_tab.dart';
+import 'admin_map_tab.dart';
 
 class AdminHome extends StatefulWidget {
   const AdminHome({super.key});
@@ -26,6 +27,7 @@ class _AdminHomeState extends State<AdminHome> {
     final List<Widget> tabs = [
       SystemAnalyticsTab(analyticsService: analyticsService),
       AdminHospitalsTab(adminService: adminService),
+      AdminMapTab(adminService: adminService),
     ];
 
     const navItems = [
@@ -38,6 +40,11 @@ class _AdminHomeState extends State<AdminHome> {
         icon: Icons.domain_outlined,
         selectedIcon: Icons.domain_rounded,
         label: 'Hospitals',
+      ),
+      AppShellNavItem(
+        icon: Icons.map_outlined,
+        selectedIcon: Icons.map_rounded,
+        label: 'Live Network Map',
       ),
     ];
 
@@ -62,6 +69,8 @@ class _AdminHomeState extends State<AdminHome> {
         return 'System Analytics';
       case 1:
         return 'Hospital Management';
+      case 2:
+        return 'Regional Hospital Map';
       default:
         return 'System Administration';
     }
@@ -72,7 +81,9 @@ class _AdminHomeState extends State<AdminHome> {
       case 0:
         return 'Regional telemetry, bed utilization, and emergency triage performance';
       case 1:
-        return 'Configure facilities, departments, and system integrations';
+        return 'Configure facilities, departments, and verification status';
+      case 2:
+        return 'Real-time geographic occupancy map across all network facilities';
       default:
         return 'System Administration Portal';
     }

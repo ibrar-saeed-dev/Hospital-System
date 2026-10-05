@@ -8,3 +8,4 @@ export 'empty_state.dart';
 export 'loading_skeleton.dart';
 export 'match_ring.dart';
 export 'app_shell.dart';
+export 'hospital_map.dart';
